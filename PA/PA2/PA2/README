@@ -1,0 +1,19 @@
+# Description
+## how to compile
+To compile the code, navigate to the `b13901165_pa2` directory and run the following commands:
+
+```bash
+make clean
+make
+```
+and then you can execute the program
+
+## how to run
+To run the program, navigate to the `b13901165_pa2` directory and use the following command:
+```bash
+./bin/mps ./inputs/<input_file> ./outputs/<output_file> [--method=td|bu]
+```
+- `<input_file>`: input file name containing chord data.
+- `<output_file>`: Path to the output file where results will be written.
+- `--method=td`: Use the top-down dynamic programming approach.
+- `--method=bu`: Use the bottom-up dynamic programming approach.(default method)
