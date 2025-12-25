@@ -36,30 +36,28 @@ std::vector<Coord3D> reconstructPath(
 
 std::vector<Coord3D> buildFallbackPath(const Grid &grid, const Net &net) {
     std::vector<Coord3D> path;
-    path.push_back(grid.fromIndex(grid.gcellIndex(net.pin1.layer, net.pin1.col, net.pin1.row)));
-    int horizontaldis = net.pin2.col - net.pin1.col;
-    int verticaldis = net.pin2.row - net.pin1.row;
-    if(grid.layerInfo(net.pin1.layer).direction == 'H'){
-        int step = horizontaldis > 0 ? 1 : -1;
-        for(int col = net.pin1.col; col != net.pin2.col; col += step){
-            path.push_back(grid.fromIndex(grid.gcellIndex(net.pin1.layer, col + step, net.pin1.row)));
+    Coord3D cur = net.pin1; 
+    Coord3D target = net.pin2;
+    path.push_back(cur);
+    while (cur.col != target.col) {
+        if (grid.layerInfo(cur.layer).direction == 'V') {
+            cur.layer = !cur.layer;
+            path.push_back(cur);
         }
-        path.push_back(grid.fromIndex(grid.gcellIndex(net.pin2.layer, net.pin2.col, net.pin1.row)));
-        step = verticaldis > 0 ? 1 : -1;
-        for(int row = net.pin1.row; row != net.pin2.row; row += step){
-            path.push_back(grid.fromIndex(grid.gcellIndex(net.pin2.layer, net.pin2.col, row + step)));
-        }
+        cur.col < target.col ? cur.col++ : cur.col--;
+        path.push_back(cur);
     }
-    else{
-        int step = verticaldis > 0 ? 1 : -1;
-        for(int row = net.pin1.row; row != net.pin2.row; row += step){
-            path.push_back(grid.fromIndex(grid.gcellIndex(net.pin1.layer, net.pin1.col, row + step)));
+    while (cur.row != target.row) {
+        if (grid.layerInfo(cur.layer).direction == 'H') {
+            cur.layer = !cur.layer;
+            path.push_back(cur);
         }
-        path.push_back(grid.fromIndex(grid.gcellIndex(net.pin2.layer, net.pin1.col, net.pin2.row)));
-        step = horizontaldis > 0 ? 1 : -1;
-        for(int col = net.pin1.col; col != net.pin2.col; col += step){
-            path.push_back(grid.fromIndex(grid.gcellIndex(net.pin2.layer, col + step, net.pin2.row)));
-        }
+        cur.row < target.row ? cur.row++ : cur.row--;
+        path.push_back(cur);
+    }
+    if (cur.layer != target.layer) {
+        cur.layer = target.layer;
+        path.push_back(cur);
     }
     return path;
 }
@@ -197,14 +195,12 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
         else {
             // 1) 計算 overflow，標記 overfull cells
             int totalOverflow = 0;
-            std::vector<char> isOverfull(totalV, 0);
+            std::vector<int> isOverfull(totalV, 0);
 
             for (int i = 0; i < totalV; ++i) {
                 int of = grid.demandByIndex(i) - grid.capacityByIndex(i);
-                if (of > 0) {
-                    isOverfull[i] = 1;
-                    totalOverflow += of;
-                }
+                isOverfull[i] = of > 0 ? 1 : 0;
+                totalOverflow += of > 0 ? of : 0;
             }
 
             // debug / early stop
