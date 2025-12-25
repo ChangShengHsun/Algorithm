@@ -247,8 +247,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
                 for (int i = 0; i < (int)costs.size(); ++i) {
                     // history penalty：讓曾經塞爆的格子在未來更不想走
                     // 用 min 避免爆掉（可調）
-                    int h = std::min(history[i], 50);
-                    costs[i] += beta * h;
+                    costs[i] += beta * history[i];
                 }
 
                 int src = grid.gcellIndex(net.pin1.layer, net.pin1.col, net.pin1.row);
