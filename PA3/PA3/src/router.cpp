@@ -150,7 +150,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
     const int totalV = totalVertices(grid);
     long long maxIterations = INF;
     std::vector<long long> history(totalV, 0);
-    const int historyInc = 1;     // 每次 overfull +1
+    int historyInc = 1;     // 每次 overfull +1
     const long long beta = 500;        // history 懲罰尺度：你W/H在 5700/6000，beta建議先試 1000~6000
     int stagcnt = 0;
     long long lastOverflow = INF;
@@ -247,7 +247,6 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
             // 4) reroute 之前先算一次 costs（以目前 demand + history）
             //    注意：不要在 reroute 每條 net 都重算整張 costs，成本很高、也不一定更好
             // 5) 只 reroute 被選到的 nets（rip-up 後才重算 cost，讓 demand 變化被看到）
-            
             for (int netId : netsToReroute) {
                 const Net &net = nets[netId];
                 // (a) rip-up：先把舊路徑從 demand 拿掉
