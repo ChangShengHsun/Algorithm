@@ -149,7 +149,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
     int maxIterations = INF;
     std::vector<int> history(totalV, 0);
     const int historyInc = 1;     // 每次 overfull +1
-    const int beta = 500;        // history 懲罰尺度：你W/H在 5700/6000，beta建議先試 1000~6000
+    const int beta = 1000;        // history 懲罰尺度：你W/H在 5700/6000，beta建議先試 1000~6000
 
     for (int iter = 0; iter < maxIterations; ++iter) {
         if (iter == 0) {
@@ -237,12 +237,11 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
             // 4) reroute 之前先算一次 costs（以目前 demand + history）
             //    注意：不要在 reroute 每條 net 都重算整張 costs，成本很高、也不一定更好
             // 5) 只 reroute 被選到的 nets（rip-up 後才重算 cost，讓 demand 變化被看到）
+            
             for (int netId : netsToReroute) {
                 const Net &net = nets[netId];
-
                 // (a) rip-up：先把舊路徑從 demand 拿掉
                 removeDemandAlongPath(grid, netId, pathOfNet[netId]);
-
                 std::vector<int> costs = computeVertexCost(grid);
                 for (int i = 0; i < (int)costs.size(); ++i) {
                     // history penalty：讓曾經塞爆的格子在未來更不想走
@@ -282,7 +281,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
             std::chrono::steady_clock::now() - startTime
         ).count();
-        if (elapsed >= 580) {
+        if (elapsed >= 300) {
             std::cerr << "[RRR] time limit reached (" << elapsed << "s) after iter=" << iter << "\n";
             break;
         }
