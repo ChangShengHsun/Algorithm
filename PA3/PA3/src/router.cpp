@@ -139,7 +139,9 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
     auto startTime = std::chrono::steady_clock::now();
 
     RoutingResult result;
+    RoutingResult result_back;
     result.nets.reserve(nets.size());
+    result_back.nets.reserve(nets.size());
     std::vector<std::vector<Coord3D>> pathOfNet(nets.size());
 
     grid.resetDemand();
@@ -149,7 +151,9 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
     int maxIterations = INF;
     std::vector<int> history(totalV, 0);
     const int historyInc = 1;     // 每次 overfull +1
-    const int beta = 1000;        // history 懲罰尺度：你W/H在 5700/6000，beta建議先試 1000~6000
+    const int beta = 500;        // history 懲罰尺度：你W/H在 5700/6000，beta建議先試 1000~6000
+    int stagcnt = 0;
+    int lastOverflow = INF;
 
     for (int iter = 0; iter < maxIterations; ++iter) {
         if (iter == 0) {
@@ -190,6 +194,8 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
                 if (of > 0) totalOverflow += of;
             }
             std::cerr << "[RRR] iter=" << iter << " totalOverflow=" << totalOverflow << "\n";
+            result_back = result;
+            lastOverflow = totalOverflow;
             if (totalOverflow == 0) break;
         }
         else {
@@ -227,11 +233,15 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
                 }
                 if (hit) netsToReroute.push_back(netId);
             }
-
-            // 若沒有 net 命中 overfull（很少見），就保守 reroute 最長的幾條（避免卡死）
-            if (netsToReroute.empty()) {
-                // fallback: reroute 全部（或 reroute 前 N 條）
-                for (int netId = 0; netId < (int)nets.size(); ++netId) netsToReroute.push_back(netId);
+            if(stagcnt >=200)
+            {
+                std::cerr << "[RRR] stagnation detected, rerouting all nets\n";
+                netsToReroute.clear();
+                for (int netId = 0; netId < (int)nets.size(); ++netId) {
+                    netsToReroute.push_back(netId);
+                }
+                stagcnt = 0;
+                lastOverflow = INF;
             }
 
             // 4) reroute 之前先算一次 costs（以目前 demand + history）
@@ -276,6 +286,16 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
                 pathOfNet[netId] = newPath;
                 updateDemandAlongPath(grid, netId, newPath);
             }
+            if (totalOverflow >= lastOverflow) {
+                stagcnt++;
+            } else {
+                stagcnt = 0;
+            }
+            if(totalOverflow <= lastOverflow)
+            {
+                result_back = result;
+            }
+            lastOverflow = std::min(totalOverflow, lastOverflow);
         }
 
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
@@ -286,7 +306,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
             break;
         }
     }
-    return result;
+    return result_back;
 }
 
 bool writeRouteFile(const std::string &filename, const RoutingResult &result) {
