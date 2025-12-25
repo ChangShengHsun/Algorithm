@@ -121,12 +121,12 @@ Graph buildGraphFromGrid(const Grid &grid) {
     return g;
 }
 
-std::vector<int> computeVertexCost(const Grid &grid) {
+std::vector<long long> computeVertexCost(const Grid &grid) {
     const int total = totalVertices(grid);
-    std::vector<int> costs(total, 0);
+    std::vector<long long> costs(total, 0);
     for(int i = 0 ; i < total ; i++)
     {
-        float alpha = 1000;
+        long long alpha = 1000;
         int demand = grid.demandByIndex(i);
         int capacity = grid.capacityByIndex(i);
         int overflow = std::min(20, std::max(0, demand - capacity));
@@ -148,12 +148,12 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
     Graph graph = buildGraphFromGrid(grid);
 
     const int totalV = totalVertices(grid);
-    int maxIterations = INF;
-    std::vector<int> history(totalV, 0);
+    long long maxIterations = INF;
+    std::vector<long long> history(totalV, 0);
     const int historyInc = 1;     // 每次 overfull +1
-    const int beta = 500;        // history 懲罰尺度：你W/H在 5700/6000，beta建議先試 1000~6000
+    const long long beta = 500;        // history 懲罰尺度：你W/H在 5700/6000，beta建議先試 1000~6000
     int stagcnt = 0;
-    int lastOverflow = INF;
+    long long lastOverflow = INF;
 
     for (int iter = 0; iter < maxIterations; ++iter) {
         if (iter == 0) {
@@ -167,10 +167,10 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
                 int dst = grid.gcellIndex(net.pin2.layer, net.pin2.col, net.pin2.row);
 
                 std::vector<int> predecessors;
-                std::vector<int> costs = computeVertexCost(grid);
+                std::vector<long long> costs = computeVertexCost(grid);
 
                 std::vector<Coord3D> path;
-                std::vector<int> dist = astar(graph, grid, src, dst, costs, &predecessors);
+                std::vector<long long> dist = astar(graph, grid, src, dst, costs, &predecessors);
                 if (dst >= 0 && dst < static_cast<int>(dist.size()) && dist[dst] < INF) {
                     path = reconstructPath(grid, src, dst, predecessors);
                 }
@@ -188,7 +188,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
                 updateDemandAlongPath(grid, static_cast<int>(netIdx), path);
             }
 
-            int totalOverflow = 0;
+            long long totalOverflow = 0;
             for (int i = 0; i < totalV; ++i) {
                 int of = grid.demandByIndex(i) - grid.capacityByIndex(i);
                 if (of > 0) totalOverflow += of;
@@ -200,7 +200,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
         }
         else {
             // 1) 計算 overflow，標記 overfull cells
-            int totalOverflow = 0;
+            long long totalOverflow = 0;
             std::vector<int> isOverfull(totalV, 0);
 
             for (int i = 0; i < totalV; ++i) {
@@ -252,8 +252,8 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
                 const Net &net = nets[netId];
                 // (a) rip-up：先把舊路徑從 demand 拿掉
                 removeDemandAlongPath(grid, netId, pathOfNet[netId]);
-                std::vector<int> costs = computeVertexCost(grid);
-                for (int i = 0; i < (int)costs.size(); ++i) {
+                std::vector<long long> costs = computeVertexCost(grid);
+                for (size_t i = 0; i < costs.size(); ++i) {
                     // history penalty：讓曾經塞爆的格子在未來更不想走
                     // 用 min 避免爆掉（可調）
                     costs[i] += beta * history[i];
@@ -263,7 +263,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
                 int dst = grid.gcellIndex(net.pin2.layer, net.pin2.col, net.pin2.row);
 
                 std::vector<int> predecessors;
-                std::vector<int> dist = astar(graph, grid, src, dst, costs, &predecessors);
+                std::vector<long long> dist = astar(graph, grid, src, dst, costs, &predecessors);
 
                 std::vector<Coord3D> newPath;
                 if (dst >= 0 && dst < (int)dist.size() && dist[dst] < INF) {

@@ -4,13 +4,14 @@
 
 #include <vector>
 #include <limits>
+#include <climits>
 
 class Grid;
 
 // Simple directed edge for adjacency list
 struct Edge {
     int to;          // destination vertex id
-    int baseCost;    // physical length (W_j, H_i, or via)
+    long long baseCost;    // physical length (W_j, H_i, or via)
     // students can ignore or extend this structure as needed
 };
 
@@ -22,7 +23,7 @@ public:
     void resize(int numVertices);
     int numVertices() const { return static_cast<int>(adj_.size()); }
 
-    void addEdge(int u, int v, int baseCost);
+    void addEdge(int u, int v, long long baseCost);
 
     const std::vector<Edge>& adj(int u) const { return adj_[u]; }
 
@@ -32,22 +33,22 @@ private:
 
 /// A minimal Dijkstra interface that students can call or modify.
 /// They can also write their own version if they prefer.
-std::vector<int> dijkstra(
+std::vector<long long> dijkstra(
     const Graph &g,
     int source,
-    std::vector<int>&vertex_cost,
+    std::vector<long long>&vertex_cost,
     std::vector<int> *outPrev = nullptr   // optional predecessor tree
 );
 
-std::vector<int> astar(
+std::vector<long long> astar(
     const Graph &g,
     const Grid &grid,
     int source,
     int target,
-    std::vector<int>&vertex_cost,
+    std::vector<long long>&vertex_cost,
     std::vector<int> *outPrev = nullptr
 );
 
-const int INF = std::numeric_limits<int>::max() / 4;
+const long long INF = LLONG_MAX >> 4;
 
 #endif // GRAPH_H

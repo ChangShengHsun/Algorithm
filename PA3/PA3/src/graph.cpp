@@ -9,11 +9,11 @@
 
 namespace {
 
-int manhattanDistance(const Grid &grid, int fromIdx, int toIdx) {
+long long manhattanDistance(const Grid &grid, int fromIdx, int toIdx) {
     Coord3D from = grid.fromIndex(fromIdx);
     Coord3D to = grid.fromIndex(toIdx);
 
-    int cost = 0;
+    long long cost = 0;
     int minCol = std::min(from.col, to.col);
     int maxCol = std::max(from.col, to.col);
     for (int c = minCol; c < maxCol; ++c) {
@@ -45,22 +45,22 @@ void Graph::resize(int numVertices) {
     adj_.assign(numVertices, {});
 }
 
-void Graph::addEdge(int u, int v, int baseCost) {
+void Graph::addEdge(int u, int v, long long baseCost) {
     // TODO: add edge (u, v) between GCell u and v with baseCosts to the graph
     adj_[u].push_back({v, baseCost});
 }
 
-std::vector<int> dijkstra(
+std::vector<long long> dijkstra(
     const Graph &g,
     int source,
-    std::vector<int>&vertex_cost,
+    std::vector<long long>&vertex_cost,
     std::vector<int> *outPrev
 ) {
     const int n = g.numVertices();
-    std::vector<int> dist(n, INF);
+    std::vector<long long> dist(n, INF);
     std::vector<int> prev(n, -1);
 
-    using Node = std::pair<int, int>; // (dist, vertex)
+    using Node = std::pair<long long, int>; // (dist, vertex)
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> pq;
 
     dist[source] = 0;
@@ -73,7 +73,7 @@ std::vector<int> dijkstra(
 
         for (const Edge &e : g.adj(u)) {
             int v = e.to;
-            int nd = d + e.baseCost + vertex_cost[v]; // Updated cost calculation
+            long long nd = d + e.baseCost + vertex_cost[v]; // Updated cost calculation
             if (nd < dist[v]) {
                 dist[v] = nd;
                 prev[v] = u;
@@ -86,20 +86,20 @@ std::vector<int> dijkstra(
     return dist;
 }
 
-std::vector<int> astar(
+std::vector<long long> astar(
     const Graph &g,
     const Grid &grid,
     int source,
     int target,
-    std::vector<int> &vertex_cost,
+    std::vector<long long> &vertex_cost,
     std::vector<int> *outPrev
 ) {
     const int n = g.numVertices();
-    std::vector<int> gScore(n, INF);
+    std::vector<long long> gScore(n, INF);
     std::vector<int> prev(n, -1);
-    std::vector<int> bestF(n, INF);
+    std::vector<long long> bestF(n, INF);
 
-    using Node = std::pair<int, int>; // (fScore, vertex)
+    using Node = std::pair<long long, int>; // (fScore, vertex)
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> pq;
 
     auto heuristic = [&](int idx) {
@@ -119,11 +119,11 @@ std::vector<int> astar(
 
         for (const Edge &e : g.adj(u)) {
             int v = e.to;
-            int tentativeG = gScore[u] + e.baseCost + vertex_cost[v];
+            long long tentativeG = gScore[u] + e.baseCost + vertex_cost[v];
             if (tentativeG < gScore[v]) {
                 gScore[v] = tentativeG;
                 prev[v] = u;
-                int newF = tentativeG + heuristic(v);
+                long long newF = tentativeG + heuristic(v);
                 bestF[v] = newF;
                 pq.push({newF, v});
             }

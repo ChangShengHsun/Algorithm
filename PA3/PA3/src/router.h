@@ -27,7 +27,7 @@ Graph buildGraphFromGrid(const Grid &grid);
 
 /// Compute per-vertex congestion cost based on grid.demand().
 /// Students can modify this function to experiment with other cost models.
-std::vector<int> computeVertexCost(const Grid &grid);
+std::vector<long long> computeVertexCost(const Grid &grid);
 
 /// Run routing for all nets.  Students will mainly implement this.
 RoutingResult runRouting(
