@@ -31,7 +31,9 @@ public:
     int demand(int l, int j, int i) const;
     void resetDemand();
     void addDemandForNetGCell(int netId, int l, int j, int i);
+    void removeDemandForNetGCell(int netId, int l, int j, int i);
     int demandByIndex(int idx) const;
+    int capacityByIndex(int idx) const;
 
     // distances / via cost
     int wlViaCost() const { return wlViaCost_; }

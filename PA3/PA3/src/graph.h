@@ -5,6 +5,8 @@
 #include <vector>
 #include <limits>
 
+class Grid;
+
 // Simple directed edge for adjacency list
 struct Edge {
     int to;          // destination vertex id
@@ -33,7 +35,17 @@ private:
 std::vector<int> dijkstra(
     const Graph &g,
     int source,
+    std::vector<int>&vertex_cost,
     std::vector<int> *outPrev = nullptr   // optional predecessor tree
+);
+
+std::vector<int> astar(
+    const Graph &g,
+    const Grid &grid,
+    int source,
+    int target,
+    std::vector<int>&vertex_cost,
+    std::vector<int> *outPrev = nullptr
 );
 
 const int INF = std::numeric_limits<int>::max() / 4;

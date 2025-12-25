@@ -252,33 +252,35 @@ def evaluate_route(cap_data, route_data):
                 if direction == 'H':
                     # Horizontal wire: should be y1 == y2
                     if y1 == y2:
-                        # Increment demand for this horizontal edge
+                        # Increment demand for this horizontal segment (all GCells from x1 to x2)
                         y = y1
                         x_min = min(x1, x2)
                         x_max = max(x1, x2)
-                        for x in range(x_min, x_max):
+                        for x in range(x_min, x_max + 1):
                             if 0 <= y < ySize and 0 <= x < xSize:
                                 gcell = (layer_idx, y, x)
                                 if gcell not in used_gcells:
                                     demand[layer_idx][y][x] += 1
                                     used_gcells.add(gcell)
-                                # Add wirelength using horizontal edge length (always count)
-                                total_wirelength += horizontal_edge_lengths[x]
+                        # Add wirelength using horizontal edge lengths between GCells
+                        for x in range(x_min, x_max):
+                            total_wirelength += horizontal_edge_lengths[x]
                 else:  # 'V'
                     # Vertical wire: should be x1 == x2
                     if x1 == x2:
-                        # Increment demand for this vertical edge
+                        # Increment demand for this vertical segment (all GCells from y1 to y2)
                         x = x1
                         y_min = min(y1, y2)
                         y_max = max(y1, y2)
-                        for y in range(y_min, y_max):
+                        for y in range(y_min, y_max + 1):
                             if 0 <= y < ySize and 0 <= x < xSize:
                                 gcell = (layer_idx, y, x)
                                 if gcell not in used_gcells:
                                     demand[layer_idx][y][x] += 1
                                     used_gcells.add(gcell)
-                                # Add wirelength using vertical edge length (always count)
-                                total_wirelength += vertical_edge_lengths[y]
+                        # Add wirelength using vertical edge lengths between GCells
+                        for y in range(y_min, y_max):
+                            total_wirelength += vertical_edge_lengths[y]
     
     # Calculate overflow
     total_overflow = 0
@@ -896,7 +898,7 @@ def main():
         print(f"    Saved: {output_3d}")
         plt.close()
     else:
-        print("\n[5/5] Skipping visualizations (use -plot flag to generate plots. Note that it may take a long time and may not be useful for large cases)")
+        print("\n[5/5] Skipping visualizations (use -plot flag to generate plots)")
     
     print("\n" + "="*60)
     print("Evaluation complete!")

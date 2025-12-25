@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CASE=${CASE:-case2}         # cap/net 檔名（不含副檔名）
-ROUTE_CASE=${ROUTE_CASE:-case2}  # 要看的 route 檔名（不含副檔名）
+CASE=${CASE:-case6}         # cap/net 檔名（不含副檔名）
+ROUTE_CASE=${ROUTE_CASE:-case6}  # 要看的 route 檔名（不含副檔名）
 OUT_HTML=${OUT_HTML:-"$PWD/outputs/out-${CASE}.html"}  # 輸出 HTML/JS 檔
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"

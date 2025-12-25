@@ -2,6 +2,7 @@
 #include "router.h"
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 
@@ -11,10 +12,6 @@ constexpr int OVERFLOW_WEIGHT = 100000;
 
 int totalVertices(const Grid &grid) {
     return grid.numLayers() * grid.xSize() * grid.ySize();
-}
-
-char normalizeDir(char d) {
-    return static_cast<char>(std::toupper(static_cast<unsigned char>(d)));
 }
 
 std::vector<Coord3D> reconstructPath(
@@ -67,14 +64,14 @@ std::vector<Coord3D> buildFallbackPath(const Grid &grid, const Net &net) {
     return path;
 }
 
-void updateDemandAlongPath(
-    Grid &grid,
-    int netId,
-    const std::vector<Coord3D> &coords
-) {
+void updateDemandAlongPath(Grid &grid, int netId, const std::vector<Coord3D> &coords) {
     for (const Coord3D &c : coords) {
         grid.addDemandForNetGCell(netId, c.layer, c.col, c.row);
     }
+}
+void removeDemandAlongPath(Grid &grid, int netId, const std::vector<Coord3D> &coords){
+    for (const Coord3D &c : coords)
+        grid.removeDemandForNetGCell(netId, c.layer, c.col, c.row);
 }
 
 } // namespace
@@ -129,48 +126,172 @@ Graph buildGraphFromGrid(const Grid &grid) {
 std::vector<int> computeVertexCost(const Grid &grid) {
     const int total = totalVertices(grid);
     std::vector<int> costs(total, 0);
+    for(int i = 0 ; i < total ; i++)
+    {
+        float alpha = 1000;
+        int demand = grid.demandByIndex(i);
+        int capacity = grid.capacityByIndex(i);
+        int overflow = std::min(20, std::max(0, demand - capacity));
+        costs[i] = alpha * ((1 << overflow) - 1);
+    }
     return costs;
 }
 
-RoutingResult runRouting(
-    Grid &grid,
-    const std::vector<Net> &nets
-) {
+RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
+    auto startTime = std::chrono::steady_clock::now();
+
     RoutingResult result;
     result.nets.reserve(nets.size());
+    std::vector<std::vector<Coord3D>> pathOfNet(nets.size());
 
     grid.resetDemand();
     Graph graph = buildGraphFromGrid(grid);
 
-    for (size_t netIdx = 0; netIdx < nets.size(); ++netIdx) {
-        const Net &net = nets[netIdx];
-        RoutedNet routed;
-        routed.name = net.name;
+    const int totalV = totalVertices(grid);
+    int maxIterations = INF;
+    std::vector<int> history(totalV, 0);
+    const int historyInc = 1;     // 每次 overfull +1
+    const int beta = 500;        // history 懲罰尺度：你W/H在 5700/6000，beta建議先試 1000~6000
 
-        int src = grid.gcellIndex(net.pin1.layer, net.pin1.col, net.pin1.row);
-        int dst = grid.gcellIndex(net.pin2.layer, net.pin2.col, net.pin2.row);
+    for (int iter = 0; iter < maxIterations; ++iter) {
+        if (iter == 0) {
+            // baseline routing
+            for (size_t netIdx = 0; netIdx < nets.size(); ++netIdx) {
+                const Net &net = nets[netIdx];
+                RoutedNet routed;
+                routed.name = net.name;
 
-        std::vector<int> predecessors;
-        std::vector<int> costs = computeVertexCost(grid);
+                int src = grid.gcellIndex(net.pin1.layer, net.pin1.col, net.pin1.row);
+                int dst = grid.gcellIndex(net.pin2.layer, net.pin2.col, net.pin2.row);
 
-        std::vector<Coord3D> path;
-        std::vector<int> dist = dijkstra(graph, src, &predecessors);
-        if (dst >= 0 && dst < static_cast<int>(dist.size()) && dist[dst] < INF) {
-            path = reconstructPath(grid, src, dst, predecessors);
+                std::vector<int> predecessors;
+                std::vector<int> costs = computeVertexCost(grid);
+
+                std::vector<Coord3D> path;
+                std::vector<int> dist = astar(graph, grid, src, dst, costs, &predecessors);
+                if (dst >= 0 && dst < static_cast<int>(dist.size()) && dist[dst] < INF) {
+                    path = reconstructPath(grid, src, dst, predecessors);
+                }
+                if (path.empty()) {
+                    std::cerr << "Warning: using fallback routing for " << net.name << "\n";
+                    path = buildFallbackPath(grid, net);
+                }
+
+                for (size_t i = 1; i < path.size(); ++i) {
+                    routed.segments.push_back(Segment{path[i - 1], path[i]});
+                }
+                result.nets.push_back(routed);
+                
+                pathOfNet[netIdx] = path;
+                updateDemandAlongPath(grid, static_cast<int>(netIdx), path);
+            }
+
+            int totalOverflow = 0;
+            for (int i = 0; i < totalV; ++i) {
+                int of = grid.demandByIndex(i) - grid.capacityByIndex(i);
+                if (of > 0) totalOverflow += of;
+            }
+            std::cerr << "[RRR] iter=" << iter << " totalOverflow=" << totalOverflow << "\n";
+            if (totalOverflow == 0) break;
         }
-        if (path.empty()) {
-            std::cerr << "Warning: using fallback routing for " << net.name << "\n";
-            path = buildFallbackPath(grid, net);
+        else {
+            // 1) 計算 overflow，標記 overfull cells
+            int totalOverflow = 0;
+            std::vector<char> isOverfull(totalV, 0);
+
+            for (int i = 0; i < totalV; ++i) {
+                int of = grid.demandByIndex(i) - grid.capacityByIndex(i);
+                if (of > 0) {
+                    isOverfull[i] = 1;
+                    totalOverflow += of;
+                }
+            }
+
+            // debug / early stop
+            std::cerr << "[RRR] iter=" << iter << " totalOverflow=" << totalOverflow << "\n";
+            if (totalOverflow == 0) break;
+
+            // 2) 更新 history：只對 overfull 的 gcell 加重
+            for (int i = 0; i < totalV; ++i) {
+                if (isOverfull[i]) history[i] += historyInc;
+            }
+
+            // 3) 選出要 reroute 的 nets：只 reroute 路徑碰到 overfull cell 的 net
+            std::vector<int> netsToReroute;
+            netsToReroute.reserve(nets.size());
+
+            for (int netId = 0; netId < (int)nets.size(); ++netId) {
+                bool hit = false;
+                for (const auto &c : pathOfNet[netId]) {
+                    int idx = grid.gcellIndex(c.layer, c.col, c.row);
+                    if (idx >= 0 && idx < totalV && isOverfull[idx]) {
+                        hit = true;
+                        break;
+                    }
+                }
+                if (hit) netsToReroute.push_back(netId);
+            }
+
+            // 若沒有 net 命中 overfull（很少見），就保守 reroute 最長的幾條（避免卡死）
+            if (netsToReroute.empty()) {
+                // fallback: reroute 全部（或 reroute 前 N 條）
+                for (int netId = 0; netId < (int)nets.size(); ++netId) netsToReroute.push_back(netId);
+            }
+
+            // 4) reroute 之前先算一次 costs（以目前 demand + history）
+            //    注意：不要在 reroute 每條 net 都重算整張 costs，成本很高、也不一定更好
+            // 5) 只 reroute 被選到的 nets（rip-up 後才重算 cost，讓 demand 變化被看到）
+            for (int netId : netsToReroute) {
+                const Net &net = nets[netId];
+
+                // (a) rip-up：先把舊路徑從 demand 拿掉
+                removeDemandAlongPath(grid, netId, pathOfNet[netId]);
+
+                std::vector<int> costs = computeVertexCost(grid);
+                for (int i = 0; i < (int)costs.size(); ++i) {
+                    // history penalty：讓曾經塞爆的格子在未來更不想走
+                    // 用 min 避免爆掉（可調）
+                    int h = std::min(history[i], 50);
+                    costs[i] += beta * h;
+                }
+
+                int src = grid.gcellIndex(net.pin1.layer, net.pin1.col, net.pin1.row);
+                int dst = grid.gcellIndex(net.pin2.layer, net.pin2.col, net.pin2.row);
+
+                std::vector<int> predecessors;
+                std::vector<int> dist = astar(graph, grid, src, dst, costs, &predecessors);
+
+                std::vector<Coord3D> newPath;
+                if (dst >= 0 && dst < (int)dist.size() && dist[dst] < INF) {
+                    newPath = reconstructPath(grid, src, dst, predecessors);
+                }
+                if (newPath.empty()) {
+                    std::cerr << "Warning: using fallback routing for " << net.name << "\n";
+                    newPath = buildFallbackPath(grid, net);
+                }
+
+                // (b) commit：更新 result & pathOfNet & demand
+                RoutedNet routed;
+                routed.name = net.name;
+                routed.segments.clear();
+                for (size_t i = 1; i < newPath.size(); ++i) {
+                    routed.segments.push_back(Segment{newPath[i - 1], newPath[i]});
+                }
+                result.nets[netId] = routed;
+
+                pathOfNet[netId] = newPath;
+                updateDemandAlongPath(grid, netId, newPath);
+            }
         }
 
-        for (size_t i = 1; i < path.size(); ++i) {
-            routed.segments.push_back(Segment{path[i - 1], path[i]});
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now() - startTime
+        ).count();
+        if (elapsed >= 580) {
+            std::cerr << "[RRR] time limit reached (" << elapsed << "s) after iter=" << iter << "\n";
+            break;
         }
-        result.nets.push_back(routed);
-
-        updateDemandAlongPath(grid, static_cast<int>(netIdx), path);
     }
-
     return result;
 }
 
