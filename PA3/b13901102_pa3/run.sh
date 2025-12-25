@@ -44,7 +44,8 @@ for i in {1..6}; do
 
     # 執行 Router 並計時
     # { time cmd; } 2>&1 用於捕捉 time 的輸出
-    TIME_LOG=$( { time ./bin/router --cap $CAP --net $NET --out $OUT > /dev/null; } 2>&1 )
+    RRR_LOG="./outputs/case${i}.rrr.log"
+    TIME_LOG=$( { time ./bin/router --cap $CAP --net $NET --out $OUT > /dev/null 2> $RRR_LOG; } 2>&1 )
     RET_CODE=$?
 
     # 提取執行時間 (格式如 0m0.123s)
