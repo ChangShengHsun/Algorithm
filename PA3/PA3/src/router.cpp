@@ -5,6 +5,7 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <random>
 
 namespace {
 
@@ -126,22 +127,27 @@ std::vector<long long> computeVertexCost(const Grid &grid) {
     std::vector<long long> costs(total, 0);
     for(int i = 0 ; i < total ; i++)
     {
+        long long baseCost = 100000;
         long long alpha = 1000;
         int demand = grid.demandByIndex(i);
         int capacity = grid.capacityByIndex(i);
         int overflow = std::min(20, std::max(0, demand - capacity));
         costs[i] = alpha * ((1 << overflow) - 1);
+        if(overflow > 0)costs[i] += baseCost;
     }
     return costs;
 }
 
 RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
     auto startTime = std::chrono::steady_clock::now();
+    std::mt19937 rng(static_cast<unsigned>(
+        std::chrono::steady_clock::now().time_since_epoch().count()
+    ));
 
     RoutingResult result;
-    RoutingResult result_back;
+    RoutingResult bestResult;
     result.nets.reserve(nets.size());
-    result_back.nets.reserve(nets.size());
+    bestResult.nets.reserve(nets.size());
     std::vector<std::vector<Coord3D>> pathOfNet(nets.size());
 
     grid.resetDemand();
@@ -151,7 +157,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
     long long maxIterations = INF;
     std::vector<long long> history(totalV, 0);
     int historyInc = 1;     // 每次 overfull +1
-    const long long beta = 500;        // history 懲罰尺度：你W/H在 5700/6000，beta建議先試 1000~6000
+    const long long beta = 1000;        // history 懲罰尺度：你W/H在 5700/6000，beta建議先試 1000~6000
     int stagcnt = 0;
     long long lastOverflow = INF;
 
@@ -194,7 +200,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
                 if (of > 0) totalOverflow += of;
             }
             std::cerr << "[RRR] iter=" << iter << " totalOverflow=" << totalOverflow << "\n";
-            result_back = result;
+            bestResult = result;
             lastOverflow = totalOverflow;
             if (totalOverflow == 0) break;
         }
@@ -222,6 +228,15 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
             std::vector<int> netsToReroute;
             netsToReroute.reserve(nets.size());
 
+            auto overfullHits = [&](int netId) {
+                int cnt = 0;
+                for (const auto &c : pathOfNet[netId]) {
+                    int idx = grid.gcellIndex(c.layer, c.col, c.row);
+                    if (idx >= 0 && idx < totalV && isOverfull[idx]) ++cnt;
+                }
+                return cnt;
+            };
+
             for (int netId = 0; netId < (int)nets.size(); ++netId) {
                 bool hit = false;
                 for (const auto &c : pathOfNet[netId]) {
@@ -243,6 +258,13 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
                 stagcnt = 0;
                 lastOverflow = INF;
             }
+
+            std::shuffle(netsToReroute.begin(), netsToReroute.end(), rng);
+            std::stable_sort(
+                netsToReroute.begin(),
+                netsToReroute.end(),
+                [&](int a, int b) { return overfullHits(a) > overfullHits(b); }
+            );
 
             // 4) reroute 之前先算一次 costs（以目前 demand + history）
             //    注意：不要在 reroute 每條 net 都重算整張 costs，成本很高、也不一定更好
@@ -292,7 +314,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
             }
             if(totalOverflow <= lastOverflow)
             {
-                result_back = result;
+                bestResult = result;
             }
             lastOverflow = std::min(totalOverflow, lastOverflow);
         }
@@ -305,7 +327,7 @@ RoutingResult runRouting(Grid &grid,const std::vector<Net> &nets) {
             break;
         }
     }
-    return result_back;
+    return bestResult;
 }
 
 bool writeRouteFile(const std::string &filename, const RoutingResult &result) {
